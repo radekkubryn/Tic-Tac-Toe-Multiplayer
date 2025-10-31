@@ -18,6 +18,11 @@ const App: React.FC = () => {
     setPlayerRole('O');
   }, []);
 
+  const handlePlayVsComputer = useCallback(() => {
+    setGameId('local-ai');
+    setPlayerRole('X');
+  }, []);
+
   const handleLeaveGame = useCallback(() => {
     setGameId(null);
     setPlayerRole(null);
@@ -33,7 +38,11 @@ const App: React.FC = () => {
       </header>
       <main className="w-full max-w-md">
         {!gameId || !playerRole ? (
-          <HomeScreen onCreateGame={handleCreateGame} onJoinGame={handleJoinGame} />
+          <HomeScreen
+            onCreateGame={handleCreateGame}
+            onJoinGame={handleJoinGame}
+            onPlayVsComputer={handlePlayVsComputer}
+          />
         ) : (
           <GameScreen gameId={gameId} playerRole={playerRole} onLeaveGame={handleLeaveGame} />
         )}

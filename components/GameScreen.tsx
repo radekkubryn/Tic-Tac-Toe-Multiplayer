@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Board from './Board';
-import type { GameState, Player } from '../types';
+import type { GameState, Player, BoardState } from '../types';
 
 interface GameScreenProps {
   gameId: string;
@@ -9,7 +9,7 @@ interface GameScreenProps {
   onLeaveGame: () => void;
 }
 
-const calculateWinner = (board: (Player | null)[]): { winner: Player | 'draw' | null, line: number[] | null } => {
+const calculateWinner = (board: BoardState): { winner: Player | 'draw' | null, line: number[] | null } => {
   const lines = [
     [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
     [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
@@ -27,16 +27,76 @@ const calculateWinner = (board: (Player | null)[]): { winner: Player | 'draw' | 
   return { winner: null, line: null };
 };
 
+const findBestMove = (board: BoardState): number => {
+    const checkWin = (b: BoardState, player: Player): number => {
+      for (let i = 0; i < 9; i++) {
+        if (b[i] === null) {
+          const tempBoard = [...b];
+          tempBoard[i] = player;
+          const { winner } = calculateWinner(tempBoard);
+          if (winner === player) return i;
+        }
+      }
+      return -1;
+    };
+
+    let move = checkWin(board, 'O'); // Win
+    if (move !== -1) return move;
+
+    move = checkWin(board, 'X'); // Block
+    if (move !== -1) return move;
+    
+    if (board[4] === null) return 4; // Center
+    
+    const corners = [0, 2, 6, 8].filter(i => board[i] === null);
+    if (corners.length > 0) return corners[Math.floor(Math.random() * corners.length)];
+
+    const available = board.map((val, idx) => val === null ? idx : -1).filter(idx => idx !== -1);
+    if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
+    
+    return -1;
+};
+
 
 const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame }) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const isVsComputer = gameId === 'local-ai';
 
   const updateGameState = useCallback((newState: GameState) => {
-    localStorage.setItem(`ttt-game-${gameId}`, JSON.stringify(newState));
     setGameState(newState);
-  }, [gameId]);
+    if (!isVsComputer) {
+      localStorage.setItem(`ttt-game-${gameId}`, JSON.stringify(newState));
+    }
+  }, [gameId, isVsComputer]);
+  
+  const makeMove = useCallback((index: number) => {
+    if (!gameState || gameState.winner || gameState.board[index] === null ) {
+      const newBoard = [...gameState.board];
+      newBoard[index] = gameState.currentPlayer;
+      const { winner, line } = calculateWinner(newBoard);
+  
+      updateGameState({
+        ...gameState,
+        board: newBoard,
+        currentPlayer: gameState.currentPlayer === 'X' ? 'O' : 'X',
+        winner: winner,
+        winningLine: line,
+      });
+    }
+  }, [gameState, updateGameState]);
 
   useEffect(() => {
+    if (isVsComputer) {
+      setGameState({
+        board: Array(9).fill(null),
+        currentPlayer: 'X',
+        winner: null,
+        winningLine: null,
+        playerJoined: true,
+      });
+      return;
+    }
+
     const initialData = localStorage.getItem(`ttt-game-${gameId}`);
     if (initialData) {
       setGameState(JSON.parse(initialData));
@@ -50,36 +110,37 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [gameId]);
+  }, [gameId, isVsComputer]);
+
+  useEffect(() => {
+    if (isVsComputer && gameState?.currentPlayer === 'O' && !gameState.winner) {
+      const timer = setTimeout(() => {
+        const bestMove = findBestMove(gameState.board);
+        if (bestMove !== -1) {
+          makeMove(bestMove);
+        }
+      }, 750);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState, isVsComputer, makeMove]);
 
   const handleCellClick = (index: number) => {
-    if (!gameState || !gameState.playerJoined || gameState.winner || gameState.board[index] || gameState.currentPlayer !== playerRole) {
-      return;
+    if (!gameState || gameState.winner || gameState.board[index]) return;
+    const isPlayerTurn = isVsComputer ? gameState.currentPlayer === 'X' : gameState.currentPlayer === playerRole;
+    if (isPlayerTurn && gameState.playerJoined) {
+        makeMove(index);
     }
-
-    const newBoard = [...gameState.board];
-    newBoard[index] = playerRole;
-    const { winner, line } = calculateWinner(newBoard);
-
-    updateGameState({
-      ...gameState,
-      board: newBoard,
-      currentPlayer: playerRole === 'X' ? 'O' : 'X',
-      winner: winner,
-      winningLine: line,
-    });
   };
 
   const handleResetGame = () => {
     if(!gameState) return;
-    const newGameState: GameState = {
+    updateGameState({
       board: Array(9).fill(null),
       currentPlayer: 'X',
       winner: null,
       winningLine: null,
       playerJoined: true,
-    };
-    updateGameState(newGameState);
+    });
   };
 
   const handleCopyId = () => {
@@ -94,17 +155,26 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
 
   let status;
   if (winner) {
-    status = winner === 'draw' ? "It's a Draw!" : `Player ${winner} Wins!`;
-  } else if (!playerJoined) {
+    if (isVsComputer) {
+        status = winner === 'X' ? 'You Win!' : winner === 'O' ? 'Computer Wins!' : "It's a Draw!";
+    } else {
+        status = winner === 'draw' ? "It's a Draw!" : `Player ${winner} Wins!`;
+    }
+  } else if (!isVsComputer && !playerJoined) {
     status = 'Waiting for Player 2 to join...';
   } else {
-    status = `Player ${currentPlayer}'s Turn`;
+    if (isVsComputer) {
+        status = currentPlayer === 'X' ? 'Your Turn' : "Computer's Turn...";
+    } else {
+        status = `Player ${currentPlayer}'s Turn`;
+    }
   }
 
-  const isMyTurn = !winner && playerJoined && currentPlayer === playerRole;
+  const isMyTurn = (!winner && playerJoined) && (isVsComputer ? currentPlayer === 'X' : currentPlayer === playerRole);
 
   return (
     <div className="flex flex-col items-center space-y-6 w-full animate-fade-in">
+      {!isVsComputer ? (
         <div className="bg-slate-800 p-4 rounded-lg shadow-lg w-full text-center">
             <p className="text-slate-400 text-sm">Game ID</p>
             <div className="flex justify-center items-center gap-2 mt-1">
@@ -117,6 +187,12 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
             </div>
             <p className="text-sm mt-2 text-slate-400">You are Player <span className={`font-bold ${playerRole === 'X' ? 'text-cyan-400' : 'text-purple-400'}`}>{playerRole}</span></p>
         </div>
+      ) : (
+        <div className="bg-slate-800 p-4 rounded-lg shadow-lg w-full text-center">
+            <p className="text-xl text-slate-300">Playing against the Computer</p>
+            <p className="text-sm mt-2 text-slate-400">You are Player <span className="font-bold text-cyan-400">X</span></p>
+        </div>
+      )}
 
       <div className={`p-2 rounded-lg transition-shadow ${isMyTurn ? 'shadow-lg shadow-cyan-500/20' : ''}`}>
         <Board board={board} onClick={handleCellClick} winningLine={winningLine}/>
@@ -127,7 +203,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
       </div>
       
       <div className="flex space-x-4 w-full">
-        {winner && (
+        {winner && playerRole === 'X' && (
             <button
             onClick={handleResetGame}
             className="flex-1 bg-cyan-500 text-white font-bold py-3 rounded-md hover:bg-cyan-600 transition-transform transform hover:scale-105"
@@ -139,7 +215,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
             onClick={onLeaveGame}
             className="flex-1 bg-red-600 text-white font-bold py-3 rounded-md hover:bg-red-700 transition-transform transform hover:scale-105"
         >
-            Leave Game
+            {isVsComputer ? 'Back to Menu' : 'Leave Game'}
         </button>
       </div>
     </div>
