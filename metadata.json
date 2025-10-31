@@ -1,0 +1,5 @@
+{
+  "name": "Tic-Tac-Toe Multiplayer",
+  "description": "A multiplayer Tic-Tac-Toe game where one player creates a game session with a unique ID to share with a second player. The game state is synchronized between players in real-time.",
+  "requestFramePermissions": []
+}
