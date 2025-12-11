@@ -64,6 +64,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
   const isVsComputer = gameId === 'local-ai';
 
   const [ws, setWs] = useState<WebSocket | null>(null);
+  const reconnectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttempts = React.useRef(0);
 
   useEffect(() => {
     if (isVsComputer) {
@@ -77,36 +79,74 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
       return;
     }
 
-    // Connect to WebSocket
-    // Determine WS URL dynamically
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = import.meta.env.DEV ? 'localhost:8000' : window.location.host;
-    const socket = new WebSocket(`${protocol}//${host}/ws/${gameId}`);
+    const connectWebSocket = () => {
+      // Determine WS URL dynamically
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = import.meta.env.DEV ? 'localhost:8000' : window.location.host;
+      const socket = new WebSocket(`${protocol}//${host}/ws/${gameId}`);
 
-    socket.onopen = () => {
-      console.log("Connected to WebSocket");
+      socket.onopen = () => {
+        console.log("Connected to WebSocket");
+        reconnectAttempts.current = 0; // Reset attempts on successful connection
+      };
+
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'STATE_UPDATE') {
+          setGameState(message.payload);
+        } else if (message.type === 'REMATCH_DECLINED') {
+          alert("Opponent declined the rematch.");
+          onLeaveGame();
+        }
+      };
+
+      socket.onclose = (event) => {
+        console.log("Disconnected from WebSocket", event.code, event.reason);
+        setWs(null); // Clear socket state
+
+        // Auto-reconnect if not clean close (e.g. lost network)
+        // 1000 is normal closure, 1001 going away. 
+        // If unmounted, cleanup function should clear timeout, so this logic is safe if component checks refs or unmounts.
+        // But cleaning up properly in return is key.
+
+        if (!event.wasClean && reconnectAttempts.current < 5) {
+          const timeout = Math.min(1000 * (2 ** reconnectAttempts.current), 10000); // Exponential backoff
+          console.log(`Attempting to reconnect in ${timeout}ms...`);
+          reconnectAttempts.current += 1;
+
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connectWebSocket();
+          }, timeout);
+        }
+      };
+
+      setWs(socket);
     };
 
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'STATE_UPDATE') {
-        setGameState(message.payload);
-      } else if (message.type === 'REMATCH_DECLINED') {
-        alert("Opponent declined the rematch.");
-        onLeaveGame();
-      }
-    };
-
-    socket.onclose = () => {
-      console.log("Disconnected from WebSocket");
-    };
-
-    setWs(socket);
+    connectWebSocket();
 
     return () => {
-      socket.close();
+      // Cleanup
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      // We can't easily close socket here without access to the *current* socket instance 
+      // if it changed or inside the closure. 
+      // But we can close 'ws' from state if we add it to dependency or ref.
+      // Actually 'ws' state updates. 
+      // Better: Create a ref for the socket itself to close it on unmount reliably.
     };
   }, [gameId, isVsComputer]);
+
+  // Separate effect to clean up socket when unmounting or leaving
+  // This avoids circular dependencies in the main connection effect
+  useEffect(() => {
+    return () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    }
+  }, [ws]);
 
   // Only for vsComputer logic
   useEffect(() => {
@@ -261,7 +301,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
   const isMyTurn = (!winner && playerJoined) && (isVsComputer ? currentPlayer === 'X' : currentPlayer === playerRole);
 
   return (
-    <div className="flex flex-col items-center space-y-6 w-full animate-fade-in">
+    <div className="flex flex-col items-center space-y-6 w-full animate-fade-in touch-manipulation">
       {/* Debug / Status Indicator */}
       <div className="absolute top-2 right-2 text-xs text-slate-500">
         {ws ? (ws.readyState === WebSocket.OPEN ? <span className="text-green-500">● Connected</span> : <span className="text-yellow-500">● Connecting...</span>) : <span className="text-red-500">● Disconnected</span>}
@@ -308,18 +348,26 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
         </div>
       )}
 
-      <div className={`p-2 rounded-lg transition-shadow ${isMyTurn ? 'shadow-lg shadow-cyan-500/20' : ''}`}>
+      <div className={`p-4 rounded-xl transition-shadow duration-300 ${isMyTurn ? 'shadow-[0_0_30px_rgba(34,211,238,0.2)] bg-slate-800/50' : ''}`}>
         <Board board={board} onClick={handleCellClick} winningLine={winningLine} />
       </div>
 
-      <div className="bg-slate-800 p-4 rounded-lg shadow-lg w-full text-center h-20 flex items-center justify-center">
-        <p className={`text-2xl font-bold transition-all duration-300 ${winner ? 'text-green-400' : 'text-slate-200'}`}>{status}</p>
+      <div className="bg-slate-800 p-6 rounded-xl shadow-lg w-full text-center min-h-[5rem] flex items-center justify-center border border-slate-700">
+        <p className={`text-2xl md:text-3xl font-bold transition-all duration-300 ${winner ? 'text-green-400 animate-bounce' : 'text-slate-200'}`}>{status}</p>
       </div>
 
-      <div className="flex space-x-4 w-full">
+      <div className="flex space-x-4 w-full pt-4">
+        {winner && (
+          <button
+            onClick={handleResetGame}
+            className="flex-1 bg-cyan-500 text-white text-lg font-bold py-4 rounded-lg hover:bg-cyan-600 active:bg-cyan-700 transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-cyan-500/20 touch-manipulation"
+          >
+            Play Again
+          </button>
+        )}
         <button
           onClick={onLeaveGame}
-          className="flex-1 bg-red-600 text-white font-bold py-3 rounded-md hover:bg-red-700 transition-transform transform hover:scale-105"
+          className="flex-1 bg-red-600 text-white text-lg font-bold py-4 rounded-lg hover:bg-red-700 active:bg-red-800 transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-red-500/20 touch-manipulation"
         >
           {isVsComputer ? 'Back to Menu' : 'Leave Game'}
         </button>

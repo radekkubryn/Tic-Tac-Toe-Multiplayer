@@ -11,13 +11,13 @@ interface BoardProps {
 
 const Board: React.FC<BoardProps> = ({ board, onClick, winningLine }) => {
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-3 gap-3 md:gap-4 w-full max-w-sm mx-auto">
       {board.map((value, index) => {
         const isWinningCell = winningLine ? winningLine.includes(index) : false;
         return (
-          <Cell 
-            key={index} 
-            value={value} 
+          <Cell
+            key={index}
+            value={value}
             onClick={() => onClick(index)}
             isWinningCell={isWinningCell}
           />

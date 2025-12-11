@@ -20,31 +20,25 @@ const Cell: React.FC<CellProps> = ({ value, onClick, isWinningCell }) => {
     </svg>
   ) : null;
 
-  const winningClass = isWinningCell ? 'bg-green-500/30' : 'bg-slate-800 hover:bg-slate-700';
+  const winningClass = isWinningCell ? 'bg-green-500/30 ring-2 ring-green-500' : 'bg-slate-700 hover:bg-slate-600 active:bg-slate-800';
 
   return (
     <button
       onClick={onClick}
-      className={`w-24 h-24 md:w-32 md:h-32 flex items-center justify-center rounded-lg shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${winningClass}`}
+      className={`w-full aspect-square flex items-center justify-center rounded-xl shadow-inner transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-cyan-500/50 touch-manipulation ${winningClass}`}
       disabled={!!value}
     >
-      <div className="transform transition-transform duration-300 ease-in-out scale-0 animate-pop-in">
+      <div className="transform transition-transform duration-300 ease-in-out scale-0 animate-pop-in w-2/3 h-2/3 flex items-center justify-center">
         {cellContent}
       </div>
       <style>{`
         @keyframes pop-in {
-          0% { transform: scale(0); }
-          100% { transform: scale(1); }
+          0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+          70% { transform: scale(1.1) rotate(5deg); }
+          100% { transform: scale(1) rotate(0); opacity: 1; }
         }
         .animate-pop-in {
-          animation: pop-in 0.3s ease-out forwards;
-        }
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.5s ease-out forwards;
+          animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
         }
       `}</style>
     </button>
