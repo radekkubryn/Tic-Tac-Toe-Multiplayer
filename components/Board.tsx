@@ -11,7 +11,7 @@ interface BoardProps {
 
 const Board: React.FC<BoardProps> = ({ board, onClick, winningLine }) => {
   return (
-    <div className="grid grid-cols-3 gap-3 md:gap-4 w-full max-w-sm mx-auto">
+    <div className="grid grid-cols-3 gap-3 md:gap-4 mx-auto max-w-fit">
       {board.map((value, index) => {
         const isWinningCell = winningLine ? winningLine.includes(index) : false;
         return (

@@ -25,7 +25,7 @@ const Cell: React.FC<CellProps> = ({ value, onClick, isWinningCell }) => {
   return (
     <button
       onClick={onClick}
-      className={`w-full aspect-square flex items-center justify-center rounded-xl shadow-inner transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-cyan-500/50 touch-manipulation ${winningClass}`}
+      className={`w-20 h-20 md:w-28 md:h-28 flex items-center justify-center rounded-xl shadow-inner transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-cyan-500/50 touch-manipulation ${winningClass}`}
       disabled={!!value}
     >
       <div className="transform transition-transform duration-300 ease-in-out scale-0 animate-pop-in w-2/3 h-2/3 flex items-center justify-center">
