@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Board from './Board';
 import type { GameState, Player, BoardState } from '../types';
+import { playSound } from '../utils/audio';
 
 interface GameScreenProps {
   gameId: string;
@@ -154,6 +155,39 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
     }
   }, [gameState, isVsComputer, ws, playerRole]);
 
+  useEffect(() => {
+    if (gameState?.winner) {
+      if (gameState.winner === 'draw') {
+        playSound('draw');
+      } else if (gameState.winner !== playerRole && !isVsComputer) {
+        // Played when opponent wins, logic to play 'lose' sound could be added here
+        playSound('win');
+      } else {
+        playSound('win');
+      }
+    }
+  }, [gameState?.winner, playerRole, isVsComputer]);
+
+  // Ref to track previous board state for sound
+  const prevBoardRef = React.useRef<BoardState>(Array(9).fill(null));
+
+  useEffect(() => {
+    if (!gameState) return;
+
+    const prev = prevBoardRef.current;
+    const curr = gameState.board;
+
+    const prevCount = prev.filter(c => c).length;
+    const currCount = curr.filter(c => c).length;
+
+    // Play sound if a move was made (count increased)
+    if (currCount > prevCount) {
+      playSound('move');
+    }
+
+    prevBoardRef.current = curr;
+  }, [gameState?.board]);
+
   const handleCellClick = (index: number) => {
     if (!gameState || gameState.winner || gameState.board[index]) return;
 
@@ -224,12 +258,32 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
               </svg>
             </button>
           </div>
-          <p className="text-sm mt-2 text-slate-400">You are Player <span className={`font-bold ${playerRole === 'X' ? 'text-cyan-400' : 'text-purple-400'}`}>{playerRole}</span></p>
+          <div className="flex justify-between items-center mt-4 px-4">
+            <div className="text-center">
+              <p className="text-cyan-400 font-bold text-xl">{gameState?.scores?.X || 0}</p>
+              <p className="text-xs text-slate-500">Player X</p>
+            </div>
+            <div className="text-center">
+              <p className="text-purple-400 font-bold text-xl">{gameState?.scores?.O || 0}</p>
+              <p className="text-xs text-slate-500">Player O</p>
+            </div>
+          </div>
+          <p className="text-sm mt-4 text-slate-400">You are Player <span className={`font-bold ${playerRole === 'X' ? 'text-cyan-400' : 'text-purple-400'}`}>{playerRole}</span></p>
         </div>
       ) : (
         <div className="bg-slate-800 p-4 rounded-lg shadow-lg w-full text-center">
           <p className="text-xl text-slate-300">Playing against the Computer</p>
-          <p className="text-sm mt-2 text-slate-400">You are Player <span className="font-bold text-cyan-400">X</span></p>
+          <div className="flex justify-between items-center mt-4 px-4">
+            <div className="text-center">
+              <p className="text-cyan-400 font-bold text-xl">{gameState?.scores?.X || 0}</p>
+              <p className="text-xs text-slate-500">You (X)</p>
+            </div>
+            <div className="text-center">
+              <p className="text-purple-400 font-bold text-xl">{gameState?.scores?.O || 0}</p>
+              <p className="text-xs text-slate-500">Computer (O)</p>
+            </div>
+          </div>
+          <p className="text-sm mt-4 text-slate-400">You are Player <span className="font-bold text-cyan-400">X</span></p>
         </div>
       )}
 
@@ -242,7 +296,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
       </div>
 
       <div className="flex space-x-4 w-full">
-        {winner && playerRole === 'X' && (
+        {winner && (
           <button
             onClick={handleResetGame}
             className="flex-1 bg-cyan-500 text-white font-bold py-3 rounded-md hover:bg-cyan-600 transition-transform transform hover:scale-105"

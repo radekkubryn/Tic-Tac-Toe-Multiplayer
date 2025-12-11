@@ -17,6 +17,7 @@ COPY index.html ./
 COPY App.tsx ./
 COPY index.tsx ./
 COPY components ./components
+COPY utils ./utils
 
 # Build the application
 RUN npm run build

@@ -32,6 +32,14 @@ class ConnectionManager:
         if game_id not in self.active_connections:
             self.active_connections[game_id] = []
         self.active_connections[game_id].append(websocket)
+        
+        # If we have 2 players, update playerJoined status and broadcast
+        if game_id in self.games and len(self.active_connections[game_id]) >= 2:
+            self.games[game_id]['playerJoined'] = True
+            await self.broadcast({
+                "type": "STATE_UPDATE",
+                "payload": self.games[game_id]
+            }, game_id)
 
     def disconnect(self, websocket: WebSocket, game_id: str):
         if game_id in self.active_connections:
@@ -70,10 +78,8 @@ def create_initial_game_state():
         "currentPlayer": "X",
         "winner": None,
         "winningLine": None,
-        "players": {}, # socket -> role? Or just rely on client side role?
-                       # Better: Store Player X and Player O availability
-        "x_taken": False,
-        "o_taken": False
+        "playerJoined": False,
+        "scores": {"X": 0, "O": 0}
     }
 
 # --- Routes ---
@@ -98,16 +104,16 @@ async def get_game(game_id: str):
 async def websocket_endpoint(websocket: WebSocket, game_id: str):
     await manager.connect(websocket, game_id)
     
-    # Initialize game if not exists (handling edge case of direct join without create, though frontend prevents it)
+    # Initialize game if not exists (handling edge case of direct join without create)
     if game_id not in manager.games:
          manager.games[game_id] = create_initial_game_state()
     
+    # Check if we should mark playerJoined based on existing connections count
+    # (This is also handled in connect() but good to have safeguard)
+    if len(manager.active_connections.get(game_id, [])) >= 2:
+        manager.games[game_id]['playerJoined'] = True
+
     game = manager.games[game_id]
-    
-    # Assign Role logic (Simple version: First come X, second O)
-    # real robust logic involves session tokens, but for now:
-    # Use queries or just let client claim.
-    # Let's simple handle: Send current state on connect.
     
     await websocket.send_json({
         "type": "STATE_UPDATE",
@@ -117,7 +123,6 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
     try:
         while True:
             data = await websocket.receive_json()
-            # data = { "type": "MAKE_MOVE", "index": 0, "player": "X" }
             
             if data['type'] == 'MAKE_MOVE':
                 index = data['index']
@@ -137,6 +142,10 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                 
                 game['winner'] = winner
                 game['winningLine'] = line
+                
+                if winner and winner != 'draw':
+                    game['scores'][winner] += 1
+                
                 if not winner:
                     game['currentPlayer'] = 'O' if player == 'X' else 'X'
                 
@@ -147,10 +156,14 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                 }, game_id)
             
             elif data['type'] == 'RESET_GAME':
+                # Keep scores and playerJoined status
                 game['board'] = [None] * 9
                 game['currentPlayer'] = 'X'
                 game['winner'] = None
                 game['winningLine'] = None
+                # game['playerJoined'] remains True
+                # game['scores'] remains
+                
                 await manager.broadcast({
                     "type": "STATE_UPDATE",
                     "payload": game

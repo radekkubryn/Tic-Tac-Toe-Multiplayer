@@ -9,4 +9,8 @@ export interface GameState {
   winner: Player | 'draw' | null;
   winningLine: number[] | null;
   playerJoined: boolean;
+  scores?: {
+    X: number;
+    O: number;
+  };
 }
