@@ -128,18 +128,24 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
             if data['type'] == 'MAKE_MOVE':
                 index = data['index']
                 player = data['player']
+                print(f"Received move: {index}, {player} for game {game_id}")
                 
                 # server-side validation
                 if game['winner']:
+                    print(f"Move rejected: Winner exists {game['winner']}")
                     continue
                 if game['currentPlayer'] != player:
+                    print(f"Move rejected: Wrong player. Expected {game['currentPlayer']}, got {player}")
                     continue
                 if game['board'][index] is not None:
-                    continue
+                     print(f"Move rejected: Cell {index} occupied")
+                     continue
                     
                 # Update State
                 game['board'][index] = player
+                print("Board updated")
                 winner, line = calculate_winner(game['board'])
+                print(f"Winner calculated: {winner}")
                 
                 game['winner'] = winner
                 game['winningLine'] = line
@@ -150,6 +156,14 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                 if not winner:
                     game['currentPlayer'] = 'O' if player == 'X' else 'X'
                 
+                print("Broadcasting update...")
+                # Broadcast
+                await manager.broadcast({
+                    "type": "STATE_UPDATE",
+                    "payload": game
+                }, game_id)
+                print("Broadcast complete")
+            
             elif data['type'] == 'REQUEST_REMATCH':
                 player = data['player']
                 game['rematchRequests'][player] = True
@@ -192,7 +206,12 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, game_id)
+        print(f"WebSocket disconnected for game {game_id}")
         # Notify others?
+    except Exception as e:
+        print(f"ERROR in websocket loop: {e}")
+        import traceback
+        traceback.print_exc()
 
 # Serve React App
 # Mount static files if directory exists (in Docker it will)

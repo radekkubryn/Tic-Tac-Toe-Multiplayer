@@ -154,6 +154,11 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
           index: index,
           player: playerRole
         }));
+      } else {
+        console.error("WebSocket not ready", ws?.readyState);
+        // Optional: Show toast or alert?
+        // alert("Connection not ready. Please wait."); 
+        // Better not to spam alerts, but log is good.
       }
     }
   }, [gameState, isVsComputer, ws, playerRole]);
@@ -257,6 +262,12 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
 
   return (
     <div className="flex flex-col items-center space-y-6 w-full animate-fade-in">
+      {/* Debug / Status Indicator */}
+      <div className="absolute top-2 right-2 text-xs text-slate-500">
+        {ws ? (ws.readyState === WebSocket.OPEN ? <span className="text-green-500">● Connected</span> : <span className="text-yellow-500">● Connecting...</span>) : <span className="text-red-500">● Disconnected</span>}
+        <span className="ml-2">| Role: {playerRole}</span>
+      </div>
+
       {!isVsComputer ? (
         <div className="bg-slate-800 p-4 rounded-lg shadow-lg w-full text-center">
           <p className="text-slate-400 text-sm">Game ID</p>
