@@ -194,6 +194,15 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
   const handleCellClick = (index: number) => {
     if (!gameState || gameState.winner || gameState.board[index]) return;
 
+    // Explicitly allow move if it's player's turn, ignoring playerJoined for local optimistic UI? 
+    // No, strictly follow turn order. 
+    // Backend validation will catch if playerJoined is false but currentPlayer is set? 
+    // Actually, currentPlayer is initialized to X. Move 1 from X is valid even if O hasn't joined yet? 
+    // Usually yes, unless we want to block until 2 players.
+    // The previous logic allowed it. 
+    // User says "Cannot click", so maybe they are blocked?
+
+    // Let's verify 'playerRole'.
     const isPlayerTurn = isVsComputer ? gameState.currentPlayer === 'X' : gameState.currentPlayer === playerRole;
 
     if (isPlayerTurn) {
@@ -202,6 +211,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
   };
 
   const handleResetGame = () => {
+    // Legacy or Admin reset? For now this is only called by the button if we keep it. 
+    // But we are removing the button that calls this.
+    // So this function is only for AI reset?
     if (isVsComputer) {
       setGameState({
         board: Array(9).fill(null),
@@ -210,13 +222,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
         winningLine: null,
         playerJoined: true,
       });
-    } else {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'RESET_GAME'
-        }));
-      }
     }
+    // If multiplayer, we use the Modal flow now.
   };
 
   const handleCopyId = () => {
@@ -234,7 +241,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
     if (isVsComputer) {
       status = winner === 'X' ? 'You Win!' : winner === 'O' ? 'Computer Wins!' : "It's a Draw!";
     } else {
-      status = winner === 'draw' ? "It's a Draw!" : `Player ${winner} Wins!`;
+      status = winner === 'draw' ? "It's a Draw!" : `Player ${winner} Won!`;
     }
   } else if (!isVsComputer && !playerJoined) {
     status = 'Waiting for Player 2 to join...';
@@ -299,14 +306,6 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
       </div>
 
       <div className="flex space-x-4 w-full">
-        {winner && (
-          <button
-            onClick={handleResetGame}
-            className="flex-1 bg-cyan-500 text-white font-bold py-3 rounded-md hover:bg-cyan-600 transition-transform transform hover:scale-105"
-          >
-            Play Again
-          </button>
-        )}
         <button
           onClick={onLeaveGame}
           className="flex-1 bg-red-600 text-white font-bold py-3 rounded-md hover:bg-red-700 transition-transform transform hover:scale-105"
@@ -314,6 +313,57 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
           {isVsComputer ? 'Back to Menu' : 'Leave Game'}
         </button>
       </div>
+
+      {/* Rematch Modal */}
+      {winner && !isVsComputer && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-slate-800 p-8 rounded-lg shadow-2xl text-center max-w-sm w-full border border-slate-700">
+            <h3 className="text-2xl font-bold text-slate-100 mb-4">Game Over!</h3>
+            <p className="text-slate-300 mb-6">
+              {winner === 'draw' ? "It's a Draw!" : `Player ${winner} Won!`}
+            </p>
+
+            {gameState?.rematchRequests?.[playerRole] ? (
+              <div className="text-cyan-400 animate-pulse font-bold">
+                Waiting for opponent...
+              </div>
+            ) : (
+              <>
+                <p className="text-slate-400 mb-6">Do you want to play again?</p>
+                <div className="flex space-x-4">
+                  <button
+                    onClick={() => {
+                      if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'REQUEST_REMATCH', player: playerRole }));
+                      }
+                    }}
+                    className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded transition hover:scale-105"
+                  >
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'DECLINE_REMATCH' }));
+                      }
+                      onLeaveGame();
+                    }}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded transition hover:scale-105"
+                  >
+                    No
+                  </button>
+                </div>
+              </>
+            )}
+            {/* Show if opponent wants rematch */
+              gameState?.rematchRequests &&
+              ((playerRole === 'X' && gameState.rematchRequests['O']) || (playerRole === 'O' && gameState.rematchRequests['X'])) &&
+              !gameState.rematchRequests[playerRole] && (
+                <p className="mt-4 text-sm text-cyan-300 animate-pulse">Opponent wants to play again!</p>
+              )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
