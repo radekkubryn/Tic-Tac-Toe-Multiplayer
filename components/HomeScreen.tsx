@@ -12,45 +12,44 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onCreateGame, onJoinGame, onPla
   const [joinId, setJoinId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const generateGameId = (): string => {
-    return Math.random().toString(36).substring(2, 7).toUpperCase();
+  // Use relative path for production (served by same origin)
+  // For local dev with separate ports, you might need a proxy or keep localhost:8000, 
+  // but for Docker we serve from same port.
+  // To make it work in both:
+  const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : '';
+
+  const handleCreate = async () => {
+    try {
+      const response = await fetch(`${API_URL}/create`, { method: 'POST' });
+      const data = await response.json();
+      onCreateGame(data.gameId);
+    } catch (e) {
+      console.error("Failed to create game", e);
+      setError("Failed to create game. Is backend running?");
+    }
   };
 
-  const handleCreate = () => {
-    const newGameId = generateGameId();
-    const initialGameState: GameState = {
-      board: Array(9).fill(null),
-      currentPlayer: 'X',
-      winner: null,
-      winningLine: null,
-      playerJoined: false,
-    };
-    localStorage.setItem(`ttt-game-${newGameId}`, JSON.stringify(initialGameState));
-    onCreateGame(newGameId);
-  };
-
-  const handleJoin = () => {
+  const handleJoin = async () => {
     setError(null);
     if (!joinId) {
       setError('Please enter a Game ID.');
       return;
     }
 
-    const gameData = localStorage.getItem(`ttt-game-${joinId.toUpperCase()}`);
-    if (!gameData) {
-      setError('Game ID not found. Please check the ID and try again.');
-      return;
-    }
+    try {
+      const response = await fetch(`${API_URL}/game/${joinId.toUpperCase()}`);
+      const data = await response.json();
 
-    const gameState: GameState = JSON.parse(gameData);
-    if (gameState.playerJoined) {
-        // Allow rejoining
-    }
-    
-    gameState.playerJoined = true;
-    localStorage.setItem(`ttt-game-${joinId.toUpperCase()}`, JSON.stringify(gameState));
+      if (data.error) {
+        setError('Game ID not found. Please check the ID and try again.');
+        return;
+      }
 
-    onJoinGame(joinId.toUpperCase());
+      onJoinGame(joinId.toUpperCase());
+    } catch (e) {
+      console.error("Failed to join game", e);
+      setError("Failed to connect to server.");
+    }
   };
 
   return (
