@@ -48,7 +48,7 @@ const App: React.FC = () => {
         )}
       </main>
       <footer className="absolute bottom-4 text-slate-500 text-sm">
-        Built by a world-class senior frontend React engineer.
+
       </footer>
     </div>
   );

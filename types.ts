@@ -13,4 +13,8 @@ export interface GameState {
     X: number;
     O: number;
   };
+  rematchRequests?: {
+    X: boolean;
+    O: boolean;
+  };
 }

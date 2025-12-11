@@ -79,7 +79,8 @@ def create_initial_game_state():
         "winner": None,
         "winningLine": None,
         "playerJoined": False,
-        "scores": {"X": 0, "O": 0}
+        "scores": {"X": 0, "O": 0},
+        "rematchRequests": {"X": False, "O": False}
     }
 
 # --- Routes ---
@@ -149,25 +150,45 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                 if not winner:
                     game['currentPlayer'] = 'O' if player == 'X' else 'X'
                 
-                # Broadcast
-                await manager.broadcast({
-                    "type": "STATE_UPDATE",
-                    "payload": game
-                }, game_id)
-            
-            elif data['type'] == 'RESET_GAME':
-                # Keep scores and playerJoined status
-                game['board'] = [None] * 9
-                game['currentPlayer'] = 'X'
-                game['winner'] = None
-                game['winningLine'] = None
-                # game['playerJoined'] remains True
-                # game['scores'] remains
+            elif data['type'] == 'REQUEST_REMATCH':
+                player = data['player']
+                game['rematchRequests'][player] = True
                 
+                # Broadcast intent so other player knows (optional, but good for UI "Opponent wants to play again")
                 await manager.broadcast({
                     "type": "STATE_UPDATE",
                     "payload": game
                 }, game_id)
+                
+                # Check if both want to play again
+                if game['rematchRequests']['X'] and game['rematchRequests']['O']:
+                     # RESET GAME
+                    game['board'] = [None] * 9
+                    game['currentPlayer'] = 'X'
+                    game['winner'] = None
+                    game['winningLine'] = None
+                    game['rematchRequests'] = {'X': False, 'O': False}
+                    
+                    await manager.broadcast({
+                        "type": "STATE_UPDATE",
+                        "payload": game
+                    }, game_id)
+
+            elif data['type'] == 'DECLINE_REMATCH':
+                 # Broadcast that match is ended/declined
+                 # We can use a special type or just payload
+                 await manager.broadcast({
+                    "type": "REMATCH_DECLINED",
+                    "payload": {}
+                }, game_id)
+                 
+                 # Optional: Close session or let clients handle disconnect
+                 
+            elif data['type'] == 'RESET_GAME':
+                 # Legacy or Admin reset? For now disable direct reset from client if we use mutual agreement
+                 # But keeping it for safe measure or changing it to do nothing if strictly mutual
+                 pass 
+
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, game_id)

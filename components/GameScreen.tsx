@@ -91,6 +91,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
       const message = JSON.parse(event.data);
       if (message.type === 'STATE_UPDATE') {
         setGameState(message.payload);
+      } else if (message.type === 'REMATCH_DECLINED') {
+        alert("Opponent declined the rematch.");
+        onLeaveGame();
       }
     };
 
