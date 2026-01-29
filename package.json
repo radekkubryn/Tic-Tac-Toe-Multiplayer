@@ -1,0 +1,10 @@
+{
+    "name": "tic-tac-toe-multiplayer-root",
+    "version": "1.0.0",
+    "description": "Tic-Tac-Toe Multiplayer Root Manifest",
+    "private": true,
+    "scripts": {
+        "build": "cd frontend && npm install && npm run build",
+        "start": "cd backend && uvicorn main:app"
+    }
+}
