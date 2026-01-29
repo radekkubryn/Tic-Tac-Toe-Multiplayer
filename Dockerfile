@@ -1,12 +1,13 @@
 # Build Stage for Frontend
-FROM node:20-alpine as build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Copy frontend files
+# Copy frontend config files
 COPY frontend/package*.json ./
 RUN npm install
 
+# Copy frontend source
 COPY frontend/ ./
 
 # Build the application
@@ -24,11 +25,12 @@ ENV PYTHONUNBUFFERED=1
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
+# Copy backend source
 COPY backend/main.py .
 
 # Copy built frontend from build stage
 COPY --from=build /app/dist ./static
 
 # Cloud Run expects the container to listen on $PORT (default 8080)
-CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"
+EXPOSE 8080
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
