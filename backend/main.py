@@ -23,6 +23,7 @@ async def log_requests(request: Request, call_next):
     start_time = time.time()
     response = await call_next(request)
     duration = time.time() - start_time
+    response.headers["X-Backend"] = "FastAPI"
     logger.info(f"Method: {request.method} Path: {request.url.path} Status: {response.status_code} Duration: {duration:.4f}s")
     return response
 
@@ -114,6 +115,10 @@ async def get_game(game_id: str):
     if game_id in manager.games:
         return manager.games[game_id]
     return {"error": "Game not found"}
+
+@api_router.get("/health")
+async def health_check():
+    return {"status": "ok", "backend": "FastAPI"}
 
 app.include_router(api_router)
 
