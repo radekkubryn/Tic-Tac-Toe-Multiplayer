@@ -88,14 +88,14 @@ def create_initial_game_state():
 class CreateGameResponse(BaseModel):
     gameId: str
 
-@app.post("/create", response_model=CreateGameResponse)
+@app.post("/api/create", response_model=CreateGameResponse)
 async def create_game():
     game_id = str(uuid.uuid4())[:5].upper()
     manager.games[game_id] = create_initial_game_state()
     print(f"Game created: {game_id}")
     return {"gameId": game_id}
 
-@app.get("/game/{game_id}")
+@app.get("/api/game/{game_id}")
 async def get_game(game_id: str):
     print(f"Fetching game: {game_id}")
     if game_id in manager.games:
@@ -106,12 +106,9 @@ async def get_game(game_id: str):
 async def websocket_endpoint(websocket: WebSocket, game_id: str):
     await manager.connect(websocket, game_id)
     
-    # Initialize game if not exists (handling edge case of direct join without create)
     if game_id not in manager.games:
          manager.games[game_id] = create_initial_game_state()
     
-    # Check if we should mark playerJoined based on existing connections count
-    # (This is also handled in connect() but good to have safeguard)
     if len(manager.active_connections.get(game_id, [])) >= 2:
         manager.games[game_id]['playerJoined'] = True
 
@@ -131,22 +128,15 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                 player = data['player']
                 print(f"Received move: {index}, {player} for game {game_id}")
                 
-                # server-side validation
                 if game['winner']:
-                    print(f"Move rejected: Winner exists {game['winner']}")
                     continue
                 if game['currentPlayer'] != player:
-                    print(f"Move rejected: Wrong player. Expected {game['currentPlayer']}, got {player}")
                     continue
                 if game['board'][index] is not None:
-                     print(f"Move rejected: Cell {index} occupied")
                      continue
                     
-                # Update State
                 game['board'][index] = player
-                print("Board updated")
                 winner, line = calculate_winner(game['board'])
-                print(f"Winner calculated: {winner}")
                 
                 game['winner'] = winner
                 game['winningLine'] = line
@@ -157,64 +147,47 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                 if not winner:
                     game['currentPlayer'] = 'O' if player == 'X' else 'X'
                 
-                print("Broadcasting update...")
-                # Broadcast
                 await manager.broadcast({
                     "type": "STATE_UPDATE",
                     "payload": game
                 }, game_id)
-                print("Broadcast complete")
             
             elif data['type'] == 'REQUEST_REMATCH':
                 player = data['player']
                 game['rematchRequests'][player] = True
-                
-                # Broadcast intent so other player knows (optional, but good for UI "Opponent wants to play again")
-                await manager.broadcast({
-                    "type": "STATE_UPDATE",
-                    "payload": game
-                }, game_id)
-                
-                # Check if both want to play again
+                await self.broadcast({ "type": "STATE_UPDATE", "payload": game }, game_id)
                 if game['rematchRequests']['X'] and game['rematchRequests']['O']:
-                     # RESET GAME
                     game['board'] = [None] * 9
                     game['currentPlayer'] = 'X'
                     game['winner'] = None
                     game['winningLine'] = None
                     game['rematchRequests'] = {'X': False, 'O': False}
-                    
-                    await manager.broadcast({
-                        "type": "STATE_UPDATE",
-                        "payload": game
-                    }, game_id)
+                    await manager.broadcast({ "type": "STATE_UPDATE", "payload": game }, game_id)
 
             elif data['type'] == 'DECLINE_REMATCH':
-                 # Broadcast that match is ended/declined
-                 # We can use a special type or just payload
-                 await manager.broadcast({
-                    "type": "REMATCH_DECLINED",
-                    "payload": {}
-                }, game_id)
+                 await manager.broadcast({ "type": "REMATCH_DECLINED", "payload": {} }, game_id)
                  
-                 # Optional: Close session or let clients handle disconnect
-                 
-            elif data['type'] == 'RESET_GAME':
-                 # Legacy or Admin reset? For now disable direct reset from client if we use mutual agreement
-                 # But keeping it for safe measure or changing it to do nothing if strictly mutual
-                 pass 
-
-
     except WebSocketDisconnect:
         manager.disconnect(websocket, game_id)
         print(f"WebSocket disconnected for game {game_id}")
-        # Notify others?
     except Exception as e:
-        print(f"ERROR in websocket loop: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"ERROR: {e}")
 
 # Serve React App
-# Mount static files if directory exists (in Docker it will)
-if os.path.exists("static"):
-    app.mount("/", StaticFiles(directory="static", html=True), name="static")
+from fastapi.responses import FileResponse
+
+# Mount assets directory
+if os.path.exists("static/assets"):
+    app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
+
+@app.get("/{full_path:path}")
+async def serve_react_app(full_path: str):
+    # If file exists in static (like favicon, robots.txt), serve it
+    static_file = os.path.join("static", full_path)
+    if os.path.isfile(static_file):
+        return FileResponse(static_file)
+    # Otherwise serve index.html for React routing
+    index_file = os.path.join("static", "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return {"error": "Not Found"}

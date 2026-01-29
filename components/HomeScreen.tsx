@@ -20,12 +20,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onCreateGame, onJoinGame, onPla
 
   const handleCreate = async () => {
     try {
-      const response = await fetch(`${API_URL}/create`, { method: 'POST' });
+      const response = await fetch(`${API_URL}/api/create`, { method: 'POST' });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text}`);
+      }
       const data = await response.json();
       onCreateGame(data.gameId);
     } catch (e) {
       console.error("Failed to create game", e);
-      setError("Failed to create game. Is backend running?");
+      setError(`Failed to create game. ${e}`);
     }
   };
 
@@ -37,7 +41,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onCreateGame, onJoinGame, onPla
     }
 
     try {
-      const response = await fetch(`${API_URL}/game/${joinId.toUpperCase()}`);
+      const response = await fetch(`${API_URL}/api/game/${joinId.toUpperCase()}`);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text}`);
+      }
       const data = await response.json();
 
       if (data.error) {
@@ -48,7 +56,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onCreateGame, onJoinGame, onPla
       onJoinGame(joinId.toUpperCase());
     } catch (e) {
       console.error("Failed to join game", e);
-      setError("Failed to connect to server.");
+      setError(`Failed to connect to server. ${e}`);
     }
   };
 
