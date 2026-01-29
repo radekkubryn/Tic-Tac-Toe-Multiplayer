@@ -16,7 +16,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onCreateGame, onJoinGame, onPla
   // For local dev with separate ports, you might need a proxy or keep localhost:8000, 
   // but for Docker we serve from same port.
   // To make it work in both:
-  const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : '';
+  const API_URL = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '';
 
   const handleCreate = async () => {
     try {

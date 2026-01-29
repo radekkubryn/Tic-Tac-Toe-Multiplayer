@@ -82,7 +82,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameId, playerRole, onLeaveGame
     const connectWebSocket = () => {
       // Determine WS URL dynamically
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = import.meta.env.DEV ? 'localhost:8000' : window.location.host;
+      const host = import.meta.env.DEV ? `${window.location.hostname}:8000` : window.location.host;
       const socket = new WebSocket(`${protocol}//${host}/ws/${gameId}`);
 
       socket.onopen = () => {

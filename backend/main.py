@@ -97,6 +97,7 @@ async def create_game():
 
 @app.get("/game/{game_id}")
 async def get_game(game_id: str):
+    print(f"Fetching game: {game_id}")
     if game_id in manager.games:
         return manager.games[game_id]
     return {"error": "Game not found"}
