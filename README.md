@@ -6,6 +6,10 @@ A high-performance, real-time Tic-Tac-Toe game featuring a modern tech stack and
   <img width="800" src="https://github.com/user-attachments/assets/aa8faed4-5bd7-4001-ae2d-2fdf511cb020" alt="Tic-Tac-Toe Banner" />
 </p>
 
+## 📚 Demo
+
+http://skgkcwc8w8k0gc8gko4w8cwc.91.241.5.172.sslip.io/
+
 ## ✨ Features
 
 - **Real-time Gameplay**: Powered by WebSockets for zero-latency moves.
