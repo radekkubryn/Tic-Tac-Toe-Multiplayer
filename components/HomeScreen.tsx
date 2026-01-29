@@ -20,7 +20,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onCreateGame, onJoinGame, onPla
 
   const handleCreate = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/create`, { method: 'POST' });
+      const response = await fetch(`${API_URL}/game-api/create`, { method: 'POST' });
       if (!response.ok) {
         const text = await response.text();
         throw new Error(`HTTP ${response.status}: ${text}`);
@@ -41,7 +41,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onCreateGame, onJoinGame, onPla
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/game/${joinId.toUpperCase()}`);
+      const response = await fetch(`${API_URL}/game-api/game/${joinId.toUpperCase()}`);
       if (!response.ok) {
         const text = await response.text();
         throw new Error(`HTTP ${response.status}: ${text}`);

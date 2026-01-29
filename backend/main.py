@@ -97,7 +97,7 @@ def create_initial_game_state():
     }
 
 # --- API Router ---
-api_router = APIRouter(prefix="/api")
+api_router = APIRouter(prefix="/game-api")
 
 class CreateGameResponse(BaseModel):
     gameId: str
@@ -198,8 +198,8 @@ if os.path.exists("static/assets"):
 
 @app.get("/{full_path:path}")
 async def serve_react_app(request: Request, full_path: str):
-    # Skip API and WS paths
-    if full_path.startswith("api") or full_path.startswith("ws"):
+    # Skip API and WS paths explicitly
+    if full_path.startswith("game-api") or full_path.startswith("api") or full_path.startswith("ws"):
         return {"error": "Not Found"}
 
     static_file = os.path.join("static", full_path)
