@@ -1,14 +1,30 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Dict, List, Optional
 import uuid
 import json
 import random
 import os
+import logging
+import time
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+    logger.info(f"Method: {request.method} Path: {request.url.path} Status: {response.status_code} Duration: {duration:.4f}s")
+    return response
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,13 +34,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ... (rest of code) ...
-
 class ConnectionManager:
     def __init__(self):
-        # game_id -> List[WebSocket]
         self.active_connections: Dict[str, List[WebSocket]] = {}
-        # game_id -> GameState
         self.games: Dict[str, dict] = {}
 
     async def connect(self, websocket: WebSocket, game_id: str):
@@ -33,7 +45,6 @@ class ConnectionManager:
             self.active_connections[game_id] = []
         self.active_connections[game_id].append(websocket)
         
-        # If we have 2 players, update playerJoined status and broadcast
         if game_id in self.games and len(self.active_connections[game_id]) >= 2:
             self.games[game_id]['playerJoined'] = True
             await self.broadcast({
@@ -47,13 +58,14 @@ class ConnectionManager:
                 self.active_connections[game_id].remove(websocket)
             if not self.active_connections[game_id]:
                 del self.active_connections[game_id]
-                # Optional: Clean up game state if no one is connected
-                # del self.games[game_id]
 
     async def broadcast(self, message: dict, game_id: str):
         if game_id in self.active_connections:
             for connection in self.active_connections[game_id]:
-                await connection.send_json(message)
+                try:
+                    await connection.send_json(message)
+                except Exception as e:
+                    logger.error(f"Error broadcasting to connection: {e}")
 
 manager = ConnectionManager()
 
@@ -83,25 +95,29 @@ def create_initial_game_state():
         "rematchRequests": {"X": False, "O": False}
     }
 
-# --- Routes ---
+# --- API Router ---
+api_router = APIRouter(prefix="/api")
 
 class CreateGameResponse(BaseModel):
     gameId: str
 
-@app.post("/api/create", response_model=CreateGameResponse)
+@api_router.post("/create", response_model=CreateGameResponse)
 async def create_game():
     game_id = str(uuid.uuid4())[:5].upper()
     manager.games[game_id] = create_initial_game_state()
-    print(f"Game created: {game_id}")
+    logger.info(f"Game created: {game_id}")
     return {"gameId": game_id}
 
-@app.get("/api/game/{game_id}")
+@api_router.get("/game/{game_id}")
 async def get_game(game_id: str):
-    print(f"Fetching game: {game_id}")
+    logger.info(f"Fetching game: {game_id}")
     if game_id in manager.games:
         return manager.games[game_id]
     return {"error": "Game not found"}
 
+app.include_router(api_router)
+
+# --- WebSocket ---
 @app.websocket("/ws/{game_id}")
 async def websocket_endpoint(websocket: WebSocket, game_id: str):
     await manager.connect(websocket, game_id)
@@ -126,7 +142,6 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
             if data['type'] == 'MAKE_MOVE':
                 index = data['index']
                 player = data['player']
-                print(f"Received move: {index}, {player} for game {game_id}")
                 
                 if game['winner']:
                     continue
@@ -155,7 +170,7 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
             elif data['type'] == 'REQUEST_REMATCH':
                 player = data['player']
                 game['rematchRequests'][player] = True
-                await self.broadcast({ "type": "STATE_UPDATE", "payload": game }, game_id)
+                await manager.broadcast({ "type": "STATE_UPDATE", "payload": game }, game_id)
                 if game['rematchRequests']['X'] and game['rematchRequests']['O']:
                     game['board'] = [None] * 9
                     game['currentPlayer'] = 'X'
@@ -169,25 +184,25 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                  
     except WebSocketDisconnect:
         manager.disconnect(websocket, game_id)
-        print(f"WebSocket disconnected for game {game_id}")
     except Exception as e:
-        print(f"ERROR: {e}")
+        logger.error(f"WebSocket error: {e}")
 
-# Serve React App
-from fastapi.responses import FileResponse
-
-# Mount assets directory
+# --- Static Files ---
 if os.path.exists("static/assets"):
     app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 
 @app.get("/{full_path:path}")
-async def serve_react_app(full_path: str):
-    # If file exists in static (like favicon, robots.txt), serve it
+async def serve_react_app(request: Request, full_path: str):
+    # Skip API and WS paths
+    if full_path.startswith("api") or full_path.startswith("ws"):
+        return {"error": "Not Found"}
+
     static_file = os.path.join("static", full_path)
     if os.path.isfile(static_file):
         return FileResponse(static_file)
-    # Otherwise serve index.html for React routing
+    
     index_file = os.path.join("static", "index.html")
     if os.path.exists(index_file):
         return FileResponse(index_file)
+    
     return {"error": "Not Found"}
