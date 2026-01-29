@@ -17,6 +17,13 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+@app.on_event("startup")
+async def startup_event():
+    logger.info("**************************************************")
+    logger.info("FASTAPI BACKEND STARTING UP...")
+    logger.info("LISTENING ON PORT: " + str(os.getenv("PORT", "8080")))
+    logger.info("**************************************************")
+
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -118,7 +125,11 @@ async def get_game(game_id: str):
 
 @api_router.get("/health")
 async def health_check():
-    return {"status": "ok", "backend": "FastAPI"}
+    return {"status": "ok", "backend": "FastAPI", "path": "/game-api/health"}
+
+@app.get("/health-check-fastapi")
+async def root_health_check():
+    return {"status": "ok", "backend": "FastAPI", "path": "/health-check-fastapi"}
 
 app.include_router(api_router)
 
