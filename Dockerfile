@@ -3,21 +3,11 @@ FROM node:20-alpine as build
 
 WORKDIR /app
 
-# Copy package files (Enable caching for npm install)
-COPY package*.json ./
-COPY tsconfig.json ./
-COPY vite.config.ts ./
-COPY types.ts ./
-
-# Install dependencies
+# Copy frontend files
+COPY frontend/package*.json ./
 RUN npm install
 
-# Copy source code (files that change more often)
-COPY index.html ./
-COPY App.tsx ./
-COPY index.tsx ./
-COPY components ./components
-COPY utils ./utils
+COPY frontend/ ./
 
 # Build the application
 RUN npm run build
@@ -41,5 +31,4 @@ COPY backend/main.py .
 COPY --from=build /app/dist ./static
 
 # Cloud Run expects the container to listen on $PORT (default 8080)
-# We use shell form to allow variable expansion
 CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"
