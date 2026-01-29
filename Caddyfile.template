@@ -1,0 +1,26 @@
+# Caddyfile Template
+# Replace your-domain-here.com with http://skgkcwc8w8k0gc8gko4w8cwc.91.241.5.172.sslip.io
+
+http://skgkcwc8w8k0gc8gko4w8cwc.91.241.5.172.sslip.io {
+    # 1. Forward all API requests to the Python backend
+    handle /game-api/* {
+        reverse_proxy localhost:8080
+    }
+
+    # 2. Forward WebSocket connections to the Python backend
+    handle /ws/* {
+        reverse_proxy localhost:8080
+    }
+
+    # 3. Serve the frontend application for everything else
+    handle {
+        # If your Caddy is in the same container, point to the static dir
+        # root * /app/static
+        # file_server
+        # try_files {path} /index.html
+
+        # Alternative: if Caddy should just forward everything else to FastAPI
+        # which already serves static files:
+        reverse_proxy localhost:8080
+    }
+}
