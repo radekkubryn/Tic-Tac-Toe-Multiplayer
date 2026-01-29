@@ -33,4 +33,4 @@ COPY --from=build /app/dist ./static
 
 # Cloud Run expects the container to listen on $PORT (default 8080)
 EXPOSE 8080
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
